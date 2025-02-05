@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/zsh
 
 # Static directory path
 CODE_DIR="/Users/dishen/Documents/dishen/atliq/python/spotify-data-retrieval"
@@ -44,11 +44,12 @@ else
 fi
 
 # Define Python scripts and log files in sequence
-declare -A scripts=(
-    ["main.py"]="main.log"
-)
+# declare -A scripts=(
+#     ["main.py"]="main.log"
+# )
+# scripts_to_run=("main.py" "main2.py")
 
-scripts_to_run+=("main.py")
+scripts_to_run=("main.py")
 
 # Run the selected Python scripts
 for script in "${scripts_to_run[@]}"; do
