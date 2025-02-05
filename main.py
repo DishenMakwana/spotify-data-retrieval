@@ -36,7 +36,7 @@ sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
 ))
 
 # Helper function to execute a custom SQL query and return the result as a DataFrame
-def execute_sql_query(query):
+def __execute_sql_query(query):
     """
     Executes a custom SQL query and returns the result as a Pandas DataFrame.
     
@@ -57,7 +57,7 @@ def execute_sql_query(query):
         return None
 
 # Function to Read Data from SQL
-def read_from_sql(table_name):
+def __read_from_sql(table_name):
     """
     Read data from a PostgreSQL table and return as a pandas DataFrame.
 
@@ -78,7 +78,7 @@ def read_from_sql(table_name):
         return None
 
 # Function to Write Data to SQL
-def write_to_sql(dataframe, table_name, if_exists="append"):
+def __write_to_sql(dataframe, table_name, if_exists="append"):
     """
     Write a pandas DataFrame to a PostgreSQL table.
 
@@ -90,7 +90,7 @@ def write_to_sql(dataframe, table_name, if_exists="append"):
     """
     try:
         # Convert lists/dictionaries to strings
-        dataframe = flatten_dataframe(dataframe)
+        dataframe = __flatten_dataframe(dataframe)
 
         # Inspect table structure
         inspector = inspect(engine)
@@ -142,10 +142,10 @@ def write_to_sql(dataframe, table_name, if_exists="append"):
             print(f"⚠️ Error writing DataFrame to '{table_full_name}': {write_error}")
 
     except Exception as e:
-        print(f"⚠️ General Error in write_to_sql function: {e}")
+        print(f"⚠️ General Error in __write_to_sql function: {e}")
 
 # Function to Delete Data from SQL
-def delete_from_sql(table_name, sqlQuery=None):
+def __delete_from_sql(table_name, sqlQuery=None):
     """
     Delete data from a SQL database, with schema consideration.
 
@@ -179,7 +179,7 @@ def delete_from_sql(table_name, sqlQuery=None):
         print(f"An exception occurred: {str(e)}")
         return None
 
-def flatten_dataframe(df):
+def __flatten_dataframe(df):
     """
     Recursively converts lists and dictionaries in DataFrame columns to strings
     until no such values remain.
@@ -243,13 +243,13 @@ def fetch_user_tracks_history():
         lambda x: x[0]["id"] if isinstance(x, list) and x and isinstance(x[0], dict) else None
     )
 
-    write_to_sql(df_spotify, "user_tracks_history", if_exists="append")
+    __write_to_sql(df_spotify, "user_tracks_history", if_exists="append")
     # df_spotify.to_csv("spotify_tracks.csv", index=False, encoding="utf-8")
     print("🎉 User Track History extracted successfully!")
 
 def format_user_tracks_history():
     # Read data from SQL
-    df = read_from_sql("user_tracks_history")
+    df = __read_from_sql("user_tracks_history")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -276,7 +276,7 @@ def format_user_tracks_history():
     table_name = "user_tracks_history_formatted"
 
     # write to sql
-    write_to_sql(df, table_name, if_exists="replace")
+    __write_to_sql(df, table_name, if_exists="replace")
     print("🎉 User Track History formatted successfully!")
 
     # add indexes
@@ -291,7 +291,7 @@ def fetch_album_data_for_user_tracks():
     WHERE album_id IS NOT NULL;
     """
 
-    df = execute_sql_query(query)
+    df = __execute_sql_query(query)
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -328,7 +328,7 @@ def fetch_album_data_for_user_tracks():
     # print(df_albums.columns)
 
     # Write to SQL
-    write_to_sql(df_albums, "album_data", if_exists="replace")
+    __write_to_sql(df_albums, "album_data", if_exists="replace")
     print("🎉 Album data fetched successfully!")
 
 def fetch_track_data_for_user_tracks():
@@ -339,7 +339,7 @@ def fetch_track_data_for_user_tracks():
     WHERE track_id IS NOT NULL;
     """
 
-    df = execute_sql_query(query)
+    df = __execute_sql_query(query)
     
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -383,7 +383,7 @@ def fetch_track_data_for_user_tracks():
     df_tracks["artists_id"] = df_tracks["artists"].apply(lambda x: x[0]["id"] if isinstance(x, list) and isinstance(x[0], dict) else None)
 
     # Write to SQL
-    write_to_sql(df_tracks, "track_data", if_exists="replace")
+    __write_to_sql(df_tracks, "track_data", if_exists="replace")
     print("🎉 Track data fetched successfully!")
 
 def fetch_artist_data_for_user_tracks():
@@ -394,7 +394,7 @@ def fetch_artist_data_for_user_tracks():
     WHERE album_artists_id IS NOT NULL;
     """
 
-    df = execute_sql_query(query)
+    df = __execute_sql_query(query)
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -431,7 +431,7 @@ def fetch_artist_data_for_user_tracks():
     # print(df_artists.columns)
 
     # Write to SQL
-    write_to_sql(df_artists, "artist_data", if_exists="replace")
+    __write_to_sql(df_artists, "artist_data", if_exists="replace")
     print("🎉 Artist data fetched successfully!")
 
 def fetch_user_followed_artists():
@@ -458,7 +458,7 @@ def fetch_user_followed_artists():
     # print(df_followed_artists.columns)
 
     # Write to SQL
-    write_to_sql(df_followed_artists, "user_followed_artists", if_exists="replace")
+    __write_to_sql(df_followed_artists, "user_followed_artists", if_exists="replace")
     print("🎉 Followed artists fetched successfully!")
 
 def fetch_user_playlists():
@@ -485,7 +485,7 @@ def fetch_user_playlists():
     # print(df_user_playlists.columns)
 
     # Write to SQL
-    write_to_sql(df_user_playlists, "user_playlists", if_exists="replace")
+    __write_to_sql(df_user_playlists, "user_playlists", if_exists="replace")
     print("🎉 User playlists fetched successfully!")
 
 def fetch_artist_top_tracks():
@@ -496,7 +496,7 @@ def fetch_artist_top_tracks():
     WHERE id IS NOT NULL;
     """
 
-    df = execute_sql_query(query)
+    df = __execute_sql_query(query)
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -534,12 +534,12 @@ def fetch_artist_top_tracks():
     # print(df_top_tracks.columns)
 
     # Write to SQL
-    write_to_sql(df_top_tracks, "artist_top_tracks", if_exists="replace")
+    __write_to_sql(df_top_tracks, "artist_top_tracks", if_exists="replace")
     print("🎉 Top tracks fetched successfully!")
 
 def fetch_artist_related_artists():
     # Read data from SQL
-    df = read_from_sql("artist_data")
+    df = __read_from_sql("artist_data")
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
         return
@@ -567,7 +567,7 @@ def fetch_artist_related_artists():
     df_related_artists.columns = df_related_artists.columns.str.replace('.', '_')
 
     # Write to SQL
-    write_to_sql(df_related_artists, "artist_related_artists", if_exists="replace")
+    __write_to_sql(df_related_artists, "artist_related_artists", if_exists="replace")
     print("🎉 Related artists fetched successfully!")
 
 def fetch_user_saved_albums():
@@ -594,7 +594,7 @@ def fetch_user_saved_albums():
     # print(df_saved_albums.columns)
 
     # Write to SQL
-    write_to_sql(df_saved_albums, "user_saved_albums", if_exists="replace")
+    __write_to_sql(df_saved_albums, "user_saved_albums", if_exists="replace")
     print("🎉 Saved albums fetched successfully!")
 
 def get_new_releases_albums():
@@ -621,7 +621,7 @@ def get_new_releases_albums():
     # print(df_new_releases.columns)
 
     # Write to SQL
-    write_to_sql(df_new_releases, "new_releases_albums", if_exists="replace")
+    __write_to_sql(df_new_releases, "new_releases_albums", if_exists="replace")
     print("🎉 New releases fetched successfully!")
 
 def fetch_playlist_items():
@@ -632,7 +632,7 @@ def fetch_playlist_items():
     WHERE id IS NOT NULL;
     """
 
-    df = execute_sql_query(query)
+    df = __execute_sql_query(query)
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -673,7 +673,7 @@ def fetch_playlist_items():
     # print(df_playlist_items.columns)
 
     # Write to SQL
-    write_to_sql(df_playlist_items, "playlist_items", if_exists="replace")
+    __write_to_sql(df_playlist_items, "playlist_items", if_exists="replace")
     print("🎉 Playlist items fetched successfully!")
 
 def delete_non_required_tables():
@@ -681,16 +681,16 @@ def delete_non_required_tables():
         Delete non-required data from the local database.
     """
 
-    delete_from_sql("user_tracks_history")
-    delete_from_sql("album_data")
-    delete_from_sql("track_data")
-    delete_from_sql("artist_data")
-    delete_from_sql("user_followed_artists")
-    delete_from_sql("user_playlists")
-    delete_from_sql("artist_top_tracks")
-    delete_from_sql("user_saved_albums")
-    delete_from_sql("new_releases_albums")
-    delete_from_sql("playlist_items")
+    __delete_from_sql("user_tracks_history")
+    __delete_from_sql("album_data")
+    __delete_from_sql("track_data")
+    __delete_from_sql("artist_data")
+    __delete_from_sql("user_followed_artists")
+    __delete_from_sql("user_playlists")
+    __delete_from_sql("artist_top_tracks")
+    __delete_from_sql("user_saved_albums")
+    __delete_from_sql("new_releases_albums")
+    __delete_from_sql("playlist_items")
 
     print("🗑️  Non-required tables deleted successfully!")
 
@@ -706,7 +706,7 @@ def check_database_connection():
 
 def format_album_data():
     # Read data from SQL
-    df = read_from_sql("album_data")
+    df = __read_from_sql("album_data")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -723,7 +723,7 @@ def format_album_data():
     table_name = "albums_formatted"
 
     # write to sql
-    write_to_sql(df, table_name, if_exists="replace")
+    __write_to_sql(df, table_name, if_exists="replace")
     print("🎉 Album Data formatted successfully!")
 
     # add indexes
@@ -732,7 +732,7 @@ def format_album_data():
 
 def format_track_data():
     # Read data from SQL
-    df = read_from_sql("track_data")
+    df = __read_from_sql("track_data")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -749,7 +749,7 @@ def format_track_data():
     table_name = "tracks_formatted"
 
     # write to sql
-    write_to_sql(df, table_name, if_exists="replace")
+    __write_to_sql(df, table_name, if_exists="replace")
     print("🎉 Track Data formatted successfully!")
 
     # add indexes
@@ -758,7 +758,7 @@ def format_track_data():
 
 def format_artist_data():
     # Read data from SQL
-    df = read_from_sql("artist_data")
+    df = __read_from_sql("artist_data")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -776,7 +776,7 @@ def format_artist_data():
     table_name = "artists_formatted"
 
     # write to sql
-    write_to_sql(df, table_name, if_exists="replace")
+    __write_to_sql(df, table_name, if_exists="replace")
     print("🎉 Artist Data formatted successfully!")
 
     # add indexes
@@ -784,7 +784,7 @@ def format_artist_data():
 
 def format_user_followed_artists():
     # Read data from SQL
-    df = read_from_sql("user_followed_artists")
+    df = __read_from_sql("user_followed_artists")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -802,7 +802,7 @@ def format_user_followed_artists():
     table_name = "user_followed_artists_formatted"
 
     # write to sql
-    write_to_sql(df, table_name, if_exists="replace")
+    __write_to_sql(df, table_name, if_exists="replace")
     print("🎉 User Followed Artists formatted successfully!")
 
     # add indexes
@@ -811,7 +811,7 @@ def format_user_followed_artists():
 
 def format_user_playlists():
     # Read data from SQL
-    df = read_from_sql("user_playlists")
+    df = __read_from_sql("user_playlists")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -829,7 +829,7 @@ def format_user_playlists():
     table_name = "user_playlists_formatted"
 
     # write to sql
-    write_to_sql(df, table_name, if_exists="replace")
+    __write_to_sql(df, table_name, if_exists="replace")
     print("🎉 User Playlists formatted successfully!")
 
     # add indexes
@@ -838,7 +838,7 @@ def format_user_playlists():
 
 def format_artist_top_tracks():
     # Read data from SQL
-    df = read_from_sql("artist_top_tracks")
+    df = __read_from_sql("artist_top_tracks")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -861,12 +861,12 @@ def format_artist_top_tracks():
     })
 
     # write to sql
-    write_to_sql(df, "artist_top_tracks_formatted", if_exists="replace")
+    __write_to_sql(df, "artist_top_tracks_formatted", if_exists="replace")
     print("🎉 Artist Top Tracks formatted successfully!")
 
 def format_artist_top_tracks():
     # Read data from SQL
-    df = read_from_sql("artist_top_tracks")
+    df = __read_from_sql("artist_top_tracks")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -884,7 +884,7 @@ def format_artist_top_tracks():
     table_name = "artist_top_tracks_formatted"
 
     # write to sql
-    write_to_sql(df, table_name, if_exists="replace")
+    __write_to_sql(df, table_name, if_exists="replace")
     print("🎉 Artist Top Tracks formatted successfully!")
 
     # add indexes
@@ -893,7 +893,7 @@ def format_artist_top_tracks():
 
 def format_user_saved_albums():
     # Read data from SQL
-    df = read_from_sql("user_saved_albums")
+    df = __read_from_sql("user_saved_albums")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -916,7 +916,7 @@ def format_user_saved_albums():
     table_name = "user_saved_albums_formatted"
 
     # write to sql
-    write_to_sql(df, table_name, if_exists="replace")
+    __write_to_sql(df, table_name, if_exists="replace")
     print("🎉 User Saved Albums formatted successfully!")
 
     # add indexes
@@ -925,7 +925,7 @@ def format_user_saved_albums():
 
 def format_new_releases_albums():
     # Read data from SQL
-    df = read_from_sql("new_releases_albums")
+    df = __read_from_sql("new_releases_albums")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -942,7 +942,7 @@ def format_new_releases_albums():
     table_name = "new_releases_albums_formatted"
 
     # write to sql
-    write_to_sql(df, table_name, if_exists="replace")
+    __write_to_sql(df, table_name, if_exists="replace")
     print("🎉 New Releases Albums formatted successfully!")
 
     # add indexes
@@ -951,7 +951,7 @@ def format_new_releases_albums():
 
 def format_playlist_items():
     # Read data from SQL
-    df = read_from_sql("playlist_items")
+    df = __read_from_sql("playlist_items")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -977,7 +977,7 @@ def format_playlist_items():
     table_name = "playlist_items_formatted"
 
     # write to sql
-    write_to_sql(df, table_name, if_exists="replace")
+    __write_to_sql(df, table_name, if_exists="replace")
     print("🎉 Playlist Items formatted successfully!")
 
     # add indexes
