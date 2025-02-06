@@ -232,16 +232,16 @@ def fetch_user_tracks_history():
     # print(df_spotify.columns)
 
     # Convert the JSON string to a Python object (list of dictionaries)
-    df_spotify["track_album_artists"] = df_spotify["track_album_artists"].apply(safe_json_loads)
+    # df_spotify["track_album_artists"] = df_spotify["track_album_artists"].apply(safe_json_loads)
 
     # Extract 'name' and 'id' safely
-    df_spotify["album_artists_name"] = df_spotify["track_album_artists"].apply(
-        lambda x: x[0]["name"] if isinstance(x, list) and x and isinstance(x[0], dict) else None
-    )
+    # df_spotify["album_artists_name"] = df_spotify["track_album_artists"].apply(
+    #     lambda x: x[0]["name"] if isinstance(x, list) and x and isinstance(x[0], dict) else None
+    # )
 
-    df_spotify["album_artists_id"] = df_spotify["track_album_artists"].apply(
-        lambda x: x[0]["id"] if isinstance(x, list) and x and isinstance(x[0], dict) else None
-    )
+    # df_spotify["album_artists_id"] = df_spotify["track_album_artists"].apply(
+    #     lambda x: x[0]["id"] if isinstance(x, list) and x and isinstance(x[0], dict) else None
+    # )
 
     __write_to_sql(df_spotify, "user_tracks_history", if_exists="append")
     # df_spotify.to_csv("spotify_tracks.csv", index=False, encoding="utf-8")
@@ -259,7 +259,7 @@ def format_user_tracks_history():
     df["played_at"] = pd.to_datetime(df["played_at"])
 
     # select only necessary columns
-    df = df[["played_at", "track_album_album_type", "track_album_external_urls_spotify", "track_album_id", "track_album_name", "track_album_release_date", "track_duration_ms", "track_id", "track_name", "track_popularity", "track_external_urls_spotify", "context_external_urls_spotify", "context_type", "album_artists_id", "album_artists_name"]]
+    df = df[["played_at", "track_album_album_type", "track_album_external_urls_spotify", "track_album_id", "track_album_name", "track_album_release_date", "track_duration_ms", "track_id", "track_name", "track_popularity", "track_external_urls_spotify", "context_external_urls_spotify", "context_type", "track_album_artists"]]
 
     # rename columns
     df = df.rename(columns={
@@ -280,7 +280,7 @@ def format_user_tracks_history():
     print("🎉 User Track History formatted successfully!")
 
     # add indexes
-    create_indexes(table_name, ["track_id", "album_id", "album_artists_id"])
+    create_indexes(table_name, ["track_id", "album_id"])
     print("🔍 Indexes created successfully!")
 
 def fetch_album_data_for_user_tracks():
@@ -376,11 +376,11 @@ def fetch_track_data_for_user_tracks():
     # print(df_tracks.columns)
 
     # Convert the JSON string to a Python object (list of dictionaries)
-    df_tracks["artists"] = df_tracks["artists"].apply(safe_json_loads)
+    # df_tracks["artists"] = df_tracks["artists"].apply(safe_json_loads)
 
     # Extract the 'name' and 'id' fields
-    df_tracks["artists_name"] = df_tracks["artists"].apply(lambda x: x[0]["name"] if isinstance(x, list) and isinstance(x[0], dict) else None)
-    df_tracks["artists_id"] = df_tracks["artists"].apply(lambda x: x[0]["id"] if isinstance(x, list) and isinstance(x[0], dict) else None)
+    # df_tracks["artists_name"] = df_tracks["artists"].apply(lambda x: x[0]["name"] if isinstance(x, list) and isinstance(x[0], dict) else None)
+    # df_tracks["artists_id"] = df_tracks["artists"].apply(lambda x: x[0]["id"] if isinstance(x, list) and isinstance(x[0], dict) else None)
 
     # Write to SQL
     __write_to_sql(df_tracks, "track_data", if_exists="replace")
@@ -389,9 +389,9 @@ def fetch_track_data_for_user_tracks():
 def fetch_artist_data_for_user_tracks():
     # Read specific data from SQL
     query = f"""
-    SELECT DISTINCT album_artists_id
+    SELECT track_album_artists
     FROM {schema_name}.user_tracks_history_formatted
-    WHERE album_artists_id IS NOT NULL;
+    WHERE track_album_artists IS NOT NULL;
     """
 
     df = __execute_sql_query(query)
@@ -400,8 +400,20 @@ def fetch_artist_data_for_user_tracks():
         print("⚠️ No data found. Exiting ETL process.")
         return
 
-    # Get unique artist IDs
-    unique_artist_ids = df["album_artists_id"].unique()
+    # Initialize a set to store unique artist IDs
+    unique_artist_ids = set()
+
+    # Iterate over the dataframe and extract artist IDs
+    for _, row in df.iterrows():
+        try:
+            artist_list = json.loads(row["track_album_artists"].replace("'", '"'))  # Handle single quotes
+            for artist in artist_list:
+                unique_artist_ids.add(artist["id"])
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            print(f"Error processing row: {row['track_album_artists']} - {e}")
+
+    # Convert set to list
+    unique_artist_ids = list(unique_artist_ids)
 
     # remove None values
     unique_artist_ids = [x for x in unique_artist_ids if x is not None]
@@ -739,7 +751,7 @@ def format_track_data():
         return
 
     # select only necessary columns
-    df = df[["duration_ms", "id", "name", "popularity", "track_number", "album_album_type", "album_id", "album_name", "album_release_date", "album_total_tracks", "artists_id", "artists_name"]]
+    df = df[["duration_ms", "id", "name", "popularity", "track_number", "album_album_type", "album_id", "album_name", "album_release_date", "album_total_tracks", "artists"]]
 
     # rename columns
     df = df.rename(columns={
@@ -753,7 +765,7 @@ def format_track_data():
     print("🎉 Track Data formatted successfully!")
 
     # add indexes
-    create_indexes(table_name, ["id", "album_id", "artists_id"])
+    create_indexes(table_name, ["id", "album_id"])
     print("🔍 Indexes created successfully!")
 
 def format_artist_data():
