@@ -4,7 +4,6 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import create_engine, inspect, text
-import psycopg2
 from dotenv import load_dotenv
 import json
 import re
@@ -12,14 +11,14 @@ import re
 load_dotenv()
 
 # 🔹 PostgreSQL Database Connection
-DATABASE_URL = os.getenv("DATABASE_URL")
-schema_name = os.getenv("SCHEMA_NAME")
+DATABASE_URL = os.getenv("DATABASE_URL").strip()
+schema_name = os.getenv("SCHEMA_NAME").strip()
 engine = create_engine(DATABASE_URL)
 
 # 🔹 Spotify API Credentials
-SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
-SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
-SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
+SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID").strip()
+SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET").strip()
+SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI").strip()
 
 print("DATABASE_URL:", DATABASE_URL , " type:", type(DATABASE_URL))
 print("SCHEMA_NAME:", schema_name , " type:", type(schema_name))
@@ -32,7 +31,7 @@ sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
     client_id=SPOTIFY_CLIENT_ID,
     client_secret=SPOTIFY_CLIENT_SECRET,
     redirect_uri=SPOTIFY_REDIRECT_URI,
-    scope="user-read-recently-played user-read-email user-read-private playlist-read-private playlist-read-collaborative user-follow-read user-top-read user-library-read"
+    scope='user-read-recently-played user-read-email user-read-private playlist-read-private playlist-read-collaborative user-follow-read user-top-read user-library-read'
 ))
 
 # Helper function to execute a custom SQL query and return the result as a DataFrame
@@ -78,7 +77,7 @@ def __read_from_sql(table_name):
         return None
 
 # Function to Write Data to SQL
-def __write_to_sql(dataframe, table_name, if_exists="append"):
+def __write_to_sql(dataframe, table_name, if_exists='append'):
     """
     Write a pandas DataFrame to a PostgreSQL table.
 
@@ -210,17 +209,16 @@ def extract_spotify_data():
         results = sp.next(results)  # Get the next page of results
         all_tracks.extend(results["items"])  # Add new tracks to the list
 
-    # Check if any tracks were found
-    if all_tracks:
-        df = pd.json_normalize(all_tracks)  # Flatten the JSON response into a DataFrame
+    df = pd.json_normalize(all_tracks)  # Flatten the JSON response into a DataFrame
 
-        # Rename columns with periods to underscores
-        df.columns = df.columns.str.replace('.', '_')
-        
-        return df
-    else:
+    if df.empty:
         print("⚠️ No recent tracks found!")
         return pd.DataFrame()  # Return an empty DataFrame if no data
+
+    # Rename columns with periods to underscores
+    df.columns = df.columns.str.replace('.', '_')
+    
+    return df
 
 def fetch_user_tracks_history():
 
@@ -243,7 +241,11 @@ def fetch_user_tracks_history():
     #     lambda x: x[0]["id"] if isinstance(x, list) and x and isinstance(x[0], dict) else None
     # )
 
-    __write_to_sql(df_spotify, "user_tracks_history", if_exists="append")
+    if df_spotify.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
+    __write_to_sql(df_spotify, "user_tracks_history")
     # df_spotify.to_csv("spotify_tracks.csv", index=False, encoding="utf-8")
     print("🎉 User Track History extracted successfully!")
 
@@ -275,8 +277,12 @@ def format_user_tracks_history():
 
     table_name = "user_tracks_history_formatted"
 
+    if df.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     # write to sql
-    __write_to_sql(df, table_name, if_exists="replace")
+    __write_to_sql(df, table_name)
     print("🎉 User Track History formatted successfully!")
 
     # add indexes
@@ -323,12 +329,16 @@ def fetch_album_data_for_user_tracks():
     # Flatten JSON response
     df_albums = pd.json_normalize(album_data)
 
+    if df_albums.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     df_albums.columns = df_albums.columns.str.replace('.', '_')
 
     # print(df_albums.columns)
 
     # Write to SQL
-    __write_to_sql(df_albums, "album_data", if_exists="replace")
+    __write_to_sql(df_albums, "album_data")
     print("🎉 Album data fetched successfully!")
 
 def fetch_track_data_for_user_tracks():
@@ -371,6 +381,10 @@ def fetch_track_data_for_user_tracks():
     # Flatten JSON response
     df_tracks = pd.json_normalize(track_data)
 
+    if df_tracks.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     df_tracks.columns = df_tracks.columns.str.replace('.', '_')
 
     # print(df_tracks.columns)
@@ -383,7 +397,7 @@ def fetch_track_data_for_user_tracks():
     # df_tracks["artists_id"] = df_tracks["artists"].apply(lambda x: x[0]["id"] if isinstance(x, list) and isinstance(x[0], dict) else None)
 
     # Write to SQL
-    __write_to_sql(df_tracks, "track_data", if_exists="replace")
+    __write_to_sql(df_tracks, "track_data")
     print("🎉 Track data fetched successfully!")
 
 def fetch_artist_data_for_user_tracks():
@@ -438,12 +452,16 @@ def fetch_artist_data_for_user_tracks():
     # Flatten JSON response
     df_artists = pd.json_normalize(artist_data)
 
+    if df_artists.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     df_artists.columns = df_artists.columns.str.replace('.', '_')
 
     # print(df_artists.columns)
 
     # Write to SQL
-    __write_to_sql(df_artists, "artist_data", if_exists="replace")
+    __write_to_sql(df_artists, "artist_data")
     print("🎉 Artist data fetched successfully!")
 
 def fetch_user_followed_artists():
@@ -465,12 +483,16 @@ def fetch_user_followed_artists():
     # Flatten JSON response
     df_followed_artists = pd.json_normalize(followed_artists)
 
+    if df_followed_artists.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     df_followed_artists.columns = df_followed_artists.columns.str.replace('.', '_')
 
     # print(df_followed_artists.columns)
 
     # Write to SQL
-    __write_to_sql(df_followed_artists, "user_followed_artists", if_exists="replace")
+    __write_to_sql(df_followed_artists, "user_followed_artists")
     print("🎉 Followed artists fetched successfully!")
 
 def fetch_user_playlists():
@@ -492,12 +514,16 @@ def fetch_user_playlists():
     # Flatten JSON response
     df_user_playlists = pd.json_normalize(user_playlists)
 
+    if df_user_playlists.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     df_user_playlists.columns = df_user_playlists.columns.str.replace('.', '_')
 
     # print(df_user_playlists.columns)
 
     # Write to SQL
-    __write_to_sql(df_user_playlists, "user_playlists", if_exists="replace")
+    __write_to_sql(df_user_playlists, "user_playlists")
     print("🎉 User playlists fetched successfully!")
 
 def fetch_artist_top_tracks():
@@ -541,12 +567,16 @@ def fetch_artist_top_tracks():
     # Flatten JSON response
     df_top_tracks = pd.json_normalize(top_tracks)
 
+    if df_top_tracks.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     df_top_tracks.columns = df_top_tracks.columns.str.replace('.', '_')
 
     # print(df_top_tracks.columns)
 
     # Write to SQL
-    __write_to_sql(df_top_tracks, "artist_top_tracks", if_exists="replace")
+    __write_to_sql(df_top_tracks, "artist_top_tracks")
     print("🎉 Top tracks fetched successfully!")
 
 def fetch_artist_related_artists():
@@ -576,10 +606,14 @@ def fetch_artist_related_artists():
     # Flatten JSON response
     df_related_artists = pd.json_normalize(related_artists)
 
+    if df_related_artists.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     df_related_artists.columns = df_related_artists.columns.str.replace('.', '_')
 
     # Write to SQL
-    __write_to_sql(df_related_artists, "artist_related_artists", if_exists="replace")
+    __write_to_sql(df_related_artists, "artist_related_artists")
     print("🎉 Related artists fetched successfully!")
 
 def fetch_user_saved_albums():
@@ -601,12 +635,16 @@ def fetch_user_saved_albums():
     # Flatten JSON response
     df_saved_albums = pd.json_normalize(saved_albums)
 
+    if df_saved_albums.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     df_saved_albums.columns = df_saved_albums.columns.str.replace('.', '_')
 
     # print(df_saved_albums.columns)
 
     # Write to SQL
-    __write_to_sql(df_saved_albums, "user_saved_albums", if_exists="replace")
+    __write_to_sql(df_saved_albums, "user_saved_albums")
     print("🎉 Saved albums fetched successfully!")
 
 def get_new_releases_albums():
@@ -628,12 +666,16 @@ def get_new_releases_albums():
     # Flatten JSON response
     df_new_releases = pd.json_normalize(new_releases)
 
+    if df_new_releases.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     df_new_releases.columns = df_new_releases.columns.str.replace('.', '_')
 
     # print(df_new_releases.columns)
 
     # Write to SQL
-    __write_to_sql(df_new_releases, "new_releases_albums", if_exists="replace")
+    __write_to_sql(df_new_releases, "new_releases_albums")
     print("🎉 New releases fetched successfully!")
 
 def fetch_playlist_items():
@@ -680,12 +722,16 @@ def fetch_playlist_items():
     # Flatten JSON response
     df_playlist_items = pd.json_normalize(playlist_items)
 
+    if df_playlist_items.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     df_playlist_items.columns = df_playlist_items.columns.str.replace('.', '_')
 
     # print(df_playlist_items.columns)
 
     # Write to SQL
-    __write_to_sql(df_playlist_items, "playlist_items", if_exists="replace")
+    __write_to_sql(df_playlist_items, "playlist_items")
     print("🎉 Playlist items fetched successfully!")
 
 def delete_non_required_tables():
@@ -708,10 +754,11 @@ def delete_non_required_tables():
 
 def check_database_connection():
     try:
-        # Connect to the PostgreSQL database
-        conn = psycopg2.connect(DATABASE_URL)
-        print("Host information: ", conn.get_dsn_parameters())
-        print("🚀 Database connection successful!")
+        # Test connection
+        with engine.connect() as connection:
+            print("🚀 Database connection successful!")
+            print("Host information: ", connection.engine.url)
+
     except Exception as e:
         print(f"⚠️ Database connection error: {e}")
         exit()
@@ -734,8 +781,12 @@ def format_album_data():
 
     table_name = "albums_formatted"
 
+    if df.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     # write to sql
-    __write_to_sql(df, table_name, if_exists="replace")
+    __write_to_sql(df, table_name)
     print("🎉 Album Data formatted successfully!")
 
     # add indexes
@@ -760,8 +811,12 @@ def format_track_data():
 
     table_name = "tracks_formatted"
 
+    if df.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     # write to sql
-    __write_to_sql(df, table_name, if_exists="replace")
+    __write_to_sql(df, table_name)
     print("🎉 Track Data formatted successfully!")
 
     # add indexes
@@ -787,8 +842,12 @@ def format_artist_data():
 
     table_name = "artists_formatted"
 
+    if df.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     # write to sql
-    __write_to_sql(df, table_name, if_exists="replace")
+    __write_to_sql(df, table_name)
     print("🎉 Artist Data formatted successfully!")
 
     # add indexes
@@ -813,8 +872,12 @@ def format_user_followed_artists():
 
     table_name = "user_followed_artists_formatted"
 
+    if df.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     # write to sql
-    __write_to_sql(df, table_name, if_exists="replace")
+    __write_to_sql(df, table_name)
     print("🎉 User Followed Artists formatted successfully!")
 
     # add indexes
@@ -840,8 +903,12 @@ def format_user_playlists():
 
     table_name = "user_playlists_formatted"
 
+    if df.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     # write to sql
-    __write_to_sql(df, table_name, if_exists="replace")
+    __write_to_sql(df, table_name)
     print("🎉 User Playlists formatted successfully!")
 
     # add indexes
@@ -872,8 +939,12 @@ def format_artist_top_tracks():
         "name": "artist_name",
     })
 
+    if df.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     # write to sql
-    __write_to_sql(df, "artist_top_tracks_formatted", if_exists="replace")
+    __write_to_sql(df, "artist_top_tracks_formatted")
     print("🎉 Artist Top Tracks formatted successfully!")
 
 def format_artist_top_tracks():
@@ -895,8 +966,12 @@ def format_artist_top_tracks():
 
     table_name = "artist_top_tracks_formatted"
 
+    if df.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     # write to sql
-    __write_to_sql(df, table_name, if_exists="replace")
+    __write_to_sql(df, table_name)
     print("🎉 Artist Top Tracks formatted successfully!")
 
     # add indexes
@@ -927,8 +1002,12 @@ def format_user_saved_albums():
 
     table_name = "user_saved_albums_formatted"
 
+    if df.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     # write to sql
-    __write_to_sql(df, table_name, if_exists="replace")
+    __write_to_sql(df, table_name)
     print("🎉 User Saved Albums formatted successfully!")
 
     # add indexes
@@ -953,8 +1032,12 @@ def format_new_releases_albums():
 
     table_name = "new_releases_albums_formatted"
 
+    if df.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     # write to sql
-    __write_to_sql(df, table_name, if_exists="replace")
+    __write_to_sql(df, table_name)
     print("🎉 New Releases Albums formatted successfully!")
 
     # add indexes
@@ -988,8 +1071,12 @@ def format_playlist_items():
 
     table_name = "playlist_items_formatted"
 
+    if df.empty:
+        print("⚠️ No data extracted. Exiting ETL process.")
+        return
+
     # write to sql
-    __write_to_sql(df, table_name, if_exists="replace")
+    __write_to_sql(df, table_name)
     print("🎉 Playlist Items formatted successfully!")
 
     # add indexes
