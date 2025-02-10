@@ -200,14 +200,15 @@ def extract_spotify_data():
 
     print("🔄 Fetching recently played songs from Spotify...")
 
-    results = sp.current_user_recently_played(limit=50, after=yesterday_unix)
-    all_tracks = results["items"]  # Initialize with the first page's tracks
+    results = sp.current_user_recently_played(limit=10, after=yesterday_unix)
+    all_tracks = results.get("items", [])  # Initialize with the first page's tracks
 
     # Loop through pages of results
     while results.get("next"):
         print("➡️  Fetching next page of current_user_recently_played data...")
         results = sp.next(results)  # Get the next page of results
-        all_tracks.extend(results["items"])  # Add new tracks to the list
+        new_tracks = results.get("items", [])
+        all_tracks.extend(new_tracks)
 
     df = pd.json_normalize(all_tracks)  # Flatten the JSON response into a DataFrame
 
@@ -241,6 +242,10 @@ def fetch_user_tracks_history():
     #     lambda x: x[0]["id"] if isinstance(x, list) and x and isinstance(x[0], dict) else None
     # )
 
+    df_spotify["track_album_image"] = df_spotify["track_album_images"].apply(
+        lambda x: x[0]["url"] if isinstance(x, list) and x and isinstance(x[0], dict) else None
+    )
+
     if df_spotify.empty:
         print("⚠️ No data extracted. Exiting ETL process.")
         return
@@ -261,7 +266,7 @@ def format_user_tracks_history():
     df["played_at"] = pd.to_datetime(df["played_at"])
 
     # select only necessary columns
-    df = df[["played_at", "track_album_album_type", "track_album_external_urls_spotify", "track_album_id", "track_album_name", "track_album_release_date", "track_duration_ms", "track_id", "track_name", "track_popularity", "track_external_urls_spotify", "context_external_urls_spotify", "context_type", "track_album_artists"]]
+    df = df[["played_at", "track_album_album_type", "track_album_external_urls_spotify", "track_album_id", "track_album_name", "track_album_release_date", "track_duration_ms", "track_id", "track_name", "track_popularity", "track_external_urls_spotify", "context_external_urls_spotify", "context_type", "track_album_artists", "track_album_images", "track_album_image"]]
 
     # rename columns
     df = df.rename(columns={

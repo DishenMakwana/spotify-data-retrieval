@@ -79,7 +79,21 @@ crontab -e
 2. Add the following line to the CRON tab to run the ETL pipeline every day at 12:00 AM:
 
 ```bash
-0 0 * * * /path/to/your/virtualenv/bin/python /path/to/your/repository/main.py
+0 0 * * * /bin/bash/ /path/to/your/virtualenv/bin/python /path/to/your/repository/main.py
 ```
 
 3. Save and exit the CRON tab.
+
+### 6. Viewing the Data in UI using Streamlit
+
+To view the data in a user-friendly interface, you can use Streamlit. To run the Streamlit app, execute the following command:
+
+```bash
+streamlit run frontend.py
+```
+
+for fetch data from database use fastapi running using below command
+
+```bash
+uvicorn server:app --reload
+```
