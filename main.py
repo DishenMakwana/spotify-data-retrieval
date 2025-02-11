@@ -7,6 +7,7 @@ from sqlalchemy import create_engine, inspect, text
 from dotenv import load_dotenv
 import json
 import re
+from typing import List, Optional, Literal, Optional
 
 load_dotenv()
 
@@ -35,7 +36,7 @@ sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
 ))
 
 # Helper function to execute a custom SQL query and return the result as a DataFrame
-def __execute_sql_query(query):
+def __execute_sql_query(query: str) -> pd.DataFrame:
     """
     Executes a custom SQL query and returns the result as a Pandas DataFrame.
     
@@ -56,7 +57,7 @@ def __execute_sql_query(query):
         return None
 
 # Function to Read Data from SQL
-def __read_from_sql(table_name):
+def __read_from_sql(table_name: str) -> pd.DataFrame:
     """
     Read data from a PostgreSQL table and return as a pandas DataFrame.
 
@@ -77,7 +78,7 @@ def __read_from_sql(table_name):
         return None
 
 # Function to Write Data to SQL
-def __write_to_sql(dataframe, table_name, if_exists='append'):
+def __write_to_sql(dataframe: pd.DataFrame, table_name: str, if_exists: Literal['fail', 'replace', 'append'] = 'append') -> None:
     """
     Write a pandas DataFrame to a PostgreSQL table.
 
@@ -94,6 +95,10 @@ def __write_to_sql(dataframe, table_name, if_exists='append'):
         # Inspect table structure
         inspector = inspect(engine)
         table_full_name = f"{schema_name}.{table_name}"
+
+        # Add created_at column if not present
+        if "created_at" not in dataframe.columns:
+            dataframe["created_at"] = datetime.now()
 
         try:
             # Check if table exists
@@ -144,7 +149,7 @@ def __write_to_sql(dataframe, table_name, if_exists='append'):
         print(f"⚠️ General Error in __write_to_sql function: {e}")
 
 # Function to Delete Data from SQL
-def __delete_from_sql(table_name, sqlQuery=None):
+def __delete_from_sql(table_name: str, sqlQuery: Optional[str] = None) -> None:
     """
     Delete data from a SQL database, with schema consideration.
 
@@ -178,7 +183,7 @@ def __delete_from_sql(table_name, sqlQuery=None):
         print(f"An exception occurred: {str(e)}")
         return None
 
-def __flatten_dataframe(df):
+def __flatten_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """
     Recursively converts lists and dictionaries in DataFrame columns to strings
     until no such values remain.
@@ -188,6 +193,34 @@ def __flatten_dataframe(df):
             if df[col].apply(lambda x: isinstance(x, (list, dict))).any():
                 df[col] = df[col].apply(str)
     return df
+
+def __filter_new_rows(
+    df_source: pd.DataFrame,
+    df_existing: pd.DataFrame,
+    join_columns: List[str]
+) -> pd.DataFrame:
+    """
+    Filter out rows in df_source that already exist in df_existing based on join_columns.
+
+    Parameters:
+        df_source (pd.DataFrame): The dataframe containing new data.
+        df_existing (pd.DataFrame): The dataframe containing existing data.
+            Can be None if no existing data is available.
+        join_columns (List[str]): List of column names to use as keys for identifying duplicates.
+
+    Returns:
+        pd.DataFrame: A dataframe containing only rows from df_source that are not present in df_existing.
+    """
+    if df_existing is not None and not df_existing.empty:
+        merged_df = df_source.merge(
+            df_existing[join_columns],
+            on=join_columns,
+            how='left',
+            indicator=True
+        )
+        return merged_df[merged_df['_merge'] == 'left_only'].drop(columns=['_merge'])
+    else:
+        return df_source
 
 def extract_spotify_data():
     """
@@ -257,6 +290,7 @@ def fetch_user_tracks_history():
 def format_user_tracks_history():
     # Read data from SQL
     df = __read_from_sql("user_tracks_history")
+    df_user_tracks_history_formatted = __read_from_sql("user_tracks_history_formatted")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -280,14 +314,18 @@ def format_user_tracks_history():
         "context_external_urls_spotify": "context_url",
     })
 
+    # Filter out rows already present in the formatted table.
+    # Here, we assume that 'played_at' and 'track_id' together are unique.
+    df_new = __filter_new_rows(df, df_user_tracks_history_formatted, ['played_at', 'track_id'])
+
     table_name = "user_tracks_history_formatted"
 
-    if df.empty:
+    if df_new.empty:
         print("⚠️ No data extracted. Exiting ETL process.")
         return
 
     # write to sql
-    __write_to_sql(df, table_name)
+    __write_to_sql(df_new, table_name)
     print("🎉 User Track History formatted successfully!")
 
     # add indexes
@@ -771,6 +809,7 @@ def check_database_connection():
 def format_album_data():
     # Read data from SQL
     df = __read_from_sql("album_data")
+    df_albums_formatted = __read_from_sql("albums_formatted")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -784,14 +823,18 @@ def format_album_data():
     #     "tracks.total": "tracks_total",
     # })
 
+    # Filter out rows already present in the formatted table.
+    # Here, we assume that 'id' is unique.
+    df_new = __filter_new_rows(df, df_albums_formatted, ['id'])
+
     table_name = "albums_formatted"
 
-    if df.empty:
+    if df_new.empty:
         print("⚠️ No data extracted. Exiting ETL process.")
         return
 
     # write to sql
-    __write_to_sql(df, table_name)
+    __write_to_sql(df_new, table_name)
     print("🎉 Album Data formatted successfully!")
 
     # add indexes
@@ -801,6 +844,7 @@ def format_album_data():
 def format_track_data():
     # Read data from SQL
     df = __read_from_sql("track_data")
+    df_tracks_formatted = __read_from_sql("tracks_formatted")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -814,14 +858,18 @@ def format_track_data():
         "album_album_type": "album_type",
     })
 
+    # Filter out rows already present in the formatted table.
+    # Here, we assume that 'id' is unique.
+    df_new = __filter_new_rows(df, df_tracks_formatted, ['id'])
+
     table_name = "tracks_formatted"
 
-    if df.empty:
+    if df_new.empty:
         print("⚠️ No data extracted. Exiting ETL process.")
         return
 
     # write to sql
-    __write_to_sql(df, table_name)
+    __write_to_sql(df_new, table_name)
     print("🎉 Track Data formatted successfully!")
 
     # add indexes
@@ -831,6 +879,7 @@ def format_track_data():
 def format_artist_data():
     # Read data from SQL
     df = __read_from_sql("artist_data")
+    df_artists_formatted = __read_from_sql("artists_formatted")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -845,14 +894,18 @@ def format_artist_data():
         "followers_total": "followers",
     })
 
+    # Filter out rows already present in the formatted table.
+    # Here, we assume that 'id' is unique.
+    df_new = __filter_new_rows(df, df_artists_formatted, ['id'])
+
     table_name = "artists_formatted"
 
-    if df.empty:
+    if df_new.empty:
         print("⚠️ No data extracted. Exiting ETL process.")
         return
 
     # write to sql
-    __write_to_sql(df, table_name)
+    __write_to_sql(df_new, table_name)
     print("🎉 Artist Data formatted successfully!")
 
     # add indexes
@@ -861,6 +914,7 @@ def format_artist_data():
 def format_user_followed_artists():
     # Read data from SQL
     df = __read_from_sql("user_followed_artists")
+    df_user_followed_artists_formatted = __read_from_sql("user_followed_artists_formatted")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -875,14 +929,18 @@ def format_user_followed_artists():
         "followers_total": "followers",
     })
 
+    # Filter out rows already present in the formatted table.
+    # Here, we assume that 'id' is unique.
+    df_new = __filter_new_rows(df, df_user_followed_artists_formatted, ['id'])
+
     table_name = "user_followed_artists_formatted"
 
-    if df.empty:
+    if df_new.empty:
         print("⚠️ No data extracted. Exiting ETL process.")
         return
 
     # write to sql
-    __write_to_sql(df, table_name)
+    __write_to_sql(df_new, table_name)
     print("🎉 User Followed Artists formatted successfully!")
 
     # add indexes
@@ -892,6 +950,7 @@ def format_user_followed_artists():
 def format_user_playlists():
     # Read data from SQL
     df = __read_from_sql("user_playlists")
+    df_user_playlists_formatted = __read_from_sql("user_playlists_formatted")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -906,14 +965,18 @@ def format_user_playlists():
         "owner_external_urls_spotify": "owner_url",
     })
 
+    # Filter out rows already present in the formatted table.
+    # Here, we assume that 'id' is unique.
+    df_new = __filter_new_rows(df, df_user_playlists_formatted, ['id'])
+
     table_name = "user_playlists_formatted"
 
-    if df.empty:
+    if df_new.empty:
         print("⚠️ No data extracted. Exiting ETL process.")
         return
 
     # write to sql
-    __write_to_sql(df, table_name)
+    __write_to_sql(df_new, table_name)
     print("🎉 User Playlists formatted successfully!")
 
     # add indexes
@@ -923,6 +986,7 @@ def format_user_playlists():
 def format_artist_top_tracks():
     # Read data from SQL
     df = __read_from_sql("artist_top_tracks")
+    df_artist_top_tracks_formatted = __read_from_sql("artist_top_tracks_formatted")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -944,17 +1008,24 @@ def format_artist_top_tracks():
         "name": "artist_name",
     })
 
-    if df.empty:
+    # Filter out rows already present in the formatted table.
+    # Here, we assume that 'artist_id' and 'track_id' together are unique.
+    df_new = __filter_new_rows(df, df_artist_top_tracks_formatted, ['artist_id', 'track_id'])
+
+    if df_new.empty:
         print("⚠️ No data extracted. Exiting ETL process.")
         return
 
+    table_name = "artist_top_tracks_formatted"
+
     # write to sql
-    __write_to_sql(df, "artist_top_tracks_formatted")
+    __write_to_sql(df_new, table_name)
     print("🎉 Artist Top Tracks formatted successfully!")
 
 def format_artist_top_tracks():
     # Read data from SQL
     df = __read_from_sql("artist_top_tracks")
+    df_artist_top_tracks_formatted = __read_from_sql("artist_top_tracks_formatted")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -969,14 +1040,19 @@ def format_artist_top_tracks():
         "album_external_urls_spotify": "album_url"
     })
 
+    # Filter out rows already present in the formatted table.
+    # Here, we assume that 'artist_id', 'track_id', and 'album_id' together are unique.
+
+    df_new = __filter_new_rows(df, df_artist_top_tracks_formatted, ['artist_id', 'track_id', 'album_id'])
+
     table_name = "artist_top_tracks_formatted"
 
-    if df.empty:
+    if df_new.empty:
         print("⚠️ No data extracted. Exiting ETL process.")
         return
 
     # write to sql
-    __write_to_sql(df, table_name)
+    __write_to_sql(df_new, table_name)
     print("🎉 Artist Top Tracks formatted successfully!")
 
     # add indexes
@@ -986,6 +1062,7 @@ def format_artist_top_tracks():
 def format_user_saved_albums():
     # Read data from SQL
     df = __read_from_sql("user_saved_albums")
+    df_user_saved_albums_formatted = __read_from_sql("user_saved_albums_formatted")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -1005,14 +1082,19 @@ def format_user_saved_albums():
         "album_tracks_total": "tracks_total",
     })
 
+    # Filter out rows already present in the formatted table.
+    # Here, we assume that 'album_id' is unique.
+
+    df_new = __filter_new_rows(df, df_user_saved_albums_formatted, ['album_id'])
+
     table_name = "user_saved_albums_formatted"
 
-    if df.empty:
+    if df_new.empty:
         print("⚠️ No data extracted. Exiting ETL process.")
         return
 
     # write to sql
-    __write_to_sql(df, table_name)
+    __write_to_sql(df_new, table_name)
     print("🎉 User Saved Albums formatted successfully!")
 
     # add indexes
@@ -1022,6 +1104,7 @@ def format_user_saved_albums():
 def format_new_releases_albums():
     # Read data from SQL
     df = __read_from_sql("new_releases_albums")
+    df_new_releases_albums_formatted = __read_from_sql("new_releases_albums_formatted")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -1035,14 +1118,18 @@ def format_new_releases_albums():
         "external_urls_spotify": "url",
     })
 
+    # Filter out rows already present in the formatted table.
+    # Here, we assume that 'id' is unique.
+    df_new = __filter_new_rows(df, df_new_releases_albums_formatted, ['id'])
+
     table_name = "new_releases_albums_formatted"
 
-    if df.empty:
+    if df_new.empty:
         print("⚠️ No data extracted. Exiting ETL process.")
         return
 
     # write to sql
-    __write_to_sql(df, table_name)
+    __write_to_sql(df_new, table_name)
     print("🎉 New Releases Albums formatted successfully!")
 
     # add indexes
@@ -1052,6 +1139,7 @@ def format_new_releases_albums():
 def format_playlist_items():
     # Read data from SQL
     df = __read_from_sql("playlist_items")
+    df_playlist_items_formatted = __read_from_sql("playlist_items_formatted")
 
     if df is None:
         print("⚠️ No data found. Exiting ETL process.")
@@ -1074,14 +1162,19 @@ def format_playlist_items():
         "track_external_urls_spotify": "track_url",
     })
 
+    # Filter out rows already present in the formatted table.
+    # Here, we assume that 'playlist_id', 'track_id', and 'album_id' together are unique.
+
+    df_new = __filter_new_rows(df, df_playlist_items_formatted, ['playlist_id', 'track_id', 'album_id'])
+
     table_name = "playlist_items_formatted"
 
-    if df.empty:
+    if df_new.empty:
         print("⚠️ No data extracted. Exiting ETL process.")
         return
 
     # write to sql
-    __write_to_sql(df, table_name)
+    __write_to_sql(df_new, table_name)
     print("🎉 Playlist Items formatted successfully!")
 
     # add indexes
@@ -1105,7 +1198,7 @@ def safe_json_loads(x):
     # For all other types, return the input as-is
     return x
 
-def create_indexes(table_name, columns):
+def create_indexes(table_name: str, columns: List[str]) -> None:
     """
     Creates indexes on specified columns for a given table.
 
@@ -1165,7 +1258,7 @@ def main():
     # fetch_artist_related_artists() # no data available
 
     # Delete non-required tables
-    delete_non_required_tables()
+    # delete_non_required_tables()
 
     print("🎉 ETL process completed successfully!")
     print("Job finished at:", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
