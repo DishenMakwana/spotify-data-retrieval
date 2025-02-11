@@ -2,16 +2,6 @@ import streamlit as st
 
 st.set_page_config(layout="wide")
 
-# Sidebar Navigation - Home Button (Appears on Other Pages)
-if "current_page" not in st.session_state:
-    st.session_state["current_page"] = "HOME"  # Default to HOME page
-
-if st.session_state["current_page"] != "HOME":
-    with st.sidebar:
-        if st.button("🏠 HOME"):
-            st.session_state["current_page"] = "HOME"
-            st.switch_page("frontend.py")  # Change to your home page file name
-
 # Title & Instructions
 st.title("Music Library Dashboard")
 st.write("Welcome! Use the buttons below to navigate between pages.")

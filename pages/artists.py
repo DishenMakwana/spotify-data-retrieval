@@ -32,7 +32,7 @@ response = requests.get(API_URL, params=params)
 if response.status_code == 200:
     result = response.json()
     data = result.get("data", [])
-    total_records = result.get("total", 0)
+    total_records = data.get("total", 0)
     
     if data:
         data = data.get("artist", [])
