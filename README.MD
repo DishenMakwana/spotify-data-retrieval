@@ -97,3 +97,10 @@ for fetch data from database use fastapi running using below command
 ```bash
 uvicorn server:app --reload
 ```
+
+##### Note: If you want to run the Streamlit app and FastAPI server simultaneously, you can use the following command:
+
+```bash
+chmod +x run.sh
+./run.sh
+```
