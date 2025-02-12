@@ -40,8 +40,6 @@ if response.status_code == 200:
 
         # If the DataFrame contains album-specific columns
         if {"id", "name"}.issubset(df.columns):
-            # df["Navigate"] = df["album_url"].apply(lambda x: f'<a href="{x}" target="_blank">Open</a>')
-            # df["Album Image"] = df["album_image"].apply(lambda x: f'<img src="{x if x else ""}" style="width:80px; height:80px;">')
 
             # Reorder columns for better display
             cols = ["id", "name"] + [col for col in df.columns if col not in ["id", "name"]]

@@ -7,7 +7,8 @@ from sqlalchemy import create_engine, inspect, text
 from dotenv import load_dotenv
 import json
 import re
-from typing import List, Optional, Literal, Optional
+from typing import List, Optional, Literal, Dict
+from sqlalchemy.types import DateTime, JSON, Text, Integer, TypeEngine
 
 load_dotenv()
 
@@ -78,38 +79,43 @@ def __read_from_sql(table_name: str) -> pd.DataFrame:
         return None
 
 # Function to Write Data to SQL
-def __write_to_sql(dataframe: pd.DataFrame, table_name: str, if_exists: Literal['fail', 'replace', 'append'] = 'append') -> None:
+def __write_to_sql(
+    dataframe: pd.DataFrame,
+    table_name: str,
+    if_exists: Literal['fail', 'replace', 'append'] = 'append',
+    column_dtype: Optional[Dict[str, TypeEngine]] = None,
+) -> None:
     """
-    Write a pandas DataFrame to a PostgreSQL table.
-
+    Write a pandas DataFrame to a PostgreSQL table using specified column types.
+    
     Parameters:
-    - dataframe (pd.DataFrame): The data to write.
-    - table_name (str): The name of the target SQL table.
-    - if_exists (str): {"fail", "replace", "append"} behavior for existing tables.
-    - schema_name (str): The schema of the table to write to.
+    - dataframe (pd.DataFrame): DataFrame to write to SQL.
+    - table_name (str): Name of the target SQL table.
+    - if_exists (str): Behavior if the table exists: 'fail', 'replace', or 'append'.
+    - column_dtype (dict, optional): Mapping from column names to SQLAlchemy types.
+                                        Example: {"created_at": DateTime(), "data": JSON(), ...}
     """
     try:
-        # Convert lists/dictionaries to strings
+        # Preprocess the DataFrame: flatten any complex types.
         dataframe = __flatten_dataframe(dataframe)
 
-        # Inspect table structure
-        inspector = inspect(engine)
-        table_full_name = f"{schema_name}.{table_name}"
-
-        # Add created_at column if not present
+        # Ensure the 'created_at' column exists.
         if "created_at" not in dataframe.columns:
             dataframe["created_at"] = datetime.now()
 
+        if column_dtype is None:
+            column_dtype = {}
+        column_dtype["created_at"] = DateTime()
+
+        # Inspect the existing table structure.
+        inspector = inspect(engine)
+        table_full_name = f"{schema_name}.{table_name}"
+
         try:
-            # Check if table exists
             existing_tables = inspector.get_table_names(schema=schema_name)
             if table_name in existing_tables:
                 print(f"✅ Table '{table_full_name}' exists. Checking for new columns...")
-
-                # Get existing column names
                 existing_columns = {col["name"] for col in inspector.get_columns(table_name, schema=schema_name)}
-
-                # Identify new columns
                 new_columns = [col for col in dataframe.columns if col not in existing_columns]
                 if new_columns:
                     print(f"➕ Adding new columns: {new_columns}")
@@ -117,30 +123,38 @@ def __write_to_sql(dataframe: pd.DataFrame, table_name: str, if_exists: Literal[
                         transaction = connection.begin()  # Start transaction
                         try:
                             for column in new_columns:
-                                alter_query = text(f'ALTER TABLE "{schema_name}"."{table_name}" ADD COLUMN "{column}" TEXT NULL')
+                                # Use provided type mapping for the column, defaulting to TEXT if not specified
+                                sql_type = column_dtype.get(column, Text())
+                                alter_query = text(
+                                    f'ALTER TABLE "{schema_name}"."{table_name}" ADD COLUMN "{column}" {sql_type.compile(engine.dialect)} NULL'
+                                )
                                 connection.execute(alter_query)
-                                print(f"✅ Successfully added column '{column}' to '{table_full_name}'")
-
-                            transaction.commit()  # Commit changes before inserting data
+                                print(f"✅ Successfully added column '{column}' with type '{sql_type}' to '{table_full_name}'")
+                            transaction.commit()  # Commit changes after adding columns
                             print("🔄 Committed column additions successfully.")
                         except Exception as col_error:
-                            transaction.rollback()  # Rollback on failure
-                            print(f"⚠️ Error adding column '{column}': {col_error}")
-
+                            transaction.rollback()  # Roll back on error
+                            print(f"⚠️ Error adding new column(s): {col_error}")
             else:
                 print(f"🚀 Table '{table_full_name}' does not exist. It will be created.")
-
         except Exception as inspect_error:
             print(f"⚠️ Error inspecting table '{table_full_name}': {inspect_error}")
 
-        # Debug: Print the DataFrame to ensure it's correct
+        # Debug: Print a preview of the DataFrame
         print("📊 DataFrame content before inserting:")
         print(dataframe.head())
-        print(dataframe.shape)
+        print(f"Shape: {dataframe.shape}")
 
-        # Write to SQL
+        # Write the DataFrame to SQL, passing in the optional column types mapping
         try:
-            dataframe.to_sql(table_name, con=engine, if_exists=if_exists, index=False, schema=schema_name)
+            dataframe.to_sql(
+                table_name,
+                con=engine,
+                if_exists=if_exists,
+                index=False,
+                schema=schema_name,
+                dtype=column_dtype  # Optional column types
+            )
             print(f"✅ Data successfully written to '{table_full_name}'")
         except Exception as write_error:
             print(f"⚠️ Error writing DataFrame to '{table_full_name}': {write_error}")
@@ -271,9 +285,12 @@ def fetch_user_tracks_history():
     #     lambda x: x[0]["name"] if isinstance(x, list) and x and isinstance(x[0], dict) else None
     # )
 
-    # df_spotify["album_artists_id"] = df_spotify["track_album_artists"].apply(
-    #     lambda x: x[0]["id"] if isinstance(x, list) and x and isinstance(x[0], dict) else None
+    # # store comma separated artist ids
+    # album_artists_ids = df_spotify["track_album_artists"].apply(
+    #     lambda x: ",".join([artist["id"] for artist in x]) if isinstance(x, list) and x and isinstance(x[0], dict) else None
     # )
+
+    # df_spotify["album_artists_id"] = album_artists_ids
 
     df_spotify["track_album_image"] = df_spotify["track_album_images"].apply(
         lambda x: x[0]["url"] if isinstance(x, list) and x and isinstance(x[0], dict) else None
@@ -283,7 +300,13 @@ def fetch_user_tracks_history():
         print("⚠️ No data extracted. Exiting ETL process.")
         return
 
-    __write_to_sql(df_spotify, "user_tracks_history")
+    # Define the mapping of DataFrame columns to SQLAlchemy types.
+    column_types = {
+        # "track_album_artists": JSON(),
+        "played_at": DateTime()
+    }
+
+    __write_to_sql(df_spotify, "user_tracks_history", column_dtype=column_types)
     # df_spotify.to_csv("spotify_tracks.csv", index=False, encoding="utf-8")
     print("🎉 User Track History extracted successfully!")
 
@@ -297,10 +320,10 @@ def format_user_tracks_history():
         return
 
     # Convert played_at to datetime
-    df["played_at"] = pd.to_datetime(df["played_at"])
+    # df["played_at"] = pd.to_datetime(df["played_at"])
 
     # select only necessary columns
-    df = df[["played_at", "track_album_album_type", "track_album_external_urls_spotify", "track_album_id", "track_album_name", "track_album_release_date", "track_duration_ms", "track_id", "track_name", "track_popularity", "track_external_urls_spotify", "context_external_urls_spotify", "context_type", "track_album_artists", "track_album_images", "track_album_image"]]
+    df = df[["played_at", "track_album_album_type", "track_album_external_urls_spotify", "track_album_id", "track_album_name", "track_album_release_date", "track_album_total_tracks", "track_album_type", "track_duration_ms", "track_id", "track_name", "track_popularity", "track_external_urls_spotify", "context_external_urls_spotify", "track_track_number", "track_type", "context_type", "track_album_artists", "track_album_images", "track_album_image"]]
 
     # rename columns
     df = df.rename(columns={
@@ -324,8 +347,14 @@ def format_user_tracks_history():
         print("⚠️ No data extracted. Exiting ETL process.")
         return
 
+    # Define the mapping of DataFrame columns to SQLAlchemy types.
+    column_types = {
+        # "track_album_artists": JSON(),
+        "played_at": DateTime()
+    }
+
     # write to sql
-    __write_to_sql(df_new, table_name)
+    __write_to_sql(df_new, table_name, column_dtype=column_types)
     print("🎉 User Track History formatted successfully!")
 
     # add indexes

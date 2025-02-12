@@ -41,7 +41,7 @@ if response.status_code == 200:
 
         # If the DataFrame contains album-specific columns
         if {"id", "name"}.issubset(df.columns):
-            df["Artist Link"] = df["url"].apply(lambda x: f'<a href="{x}" target="_blank">Open</a>')
+            df["Artist Link"] = df["url"].apply(lambda x: f'<a href="{x}" target="_blank">Open</a>' if x else "")
             df['genres'] = df['genres'].apply(lambda x: ', '.join(ast.literal_eval(x)) if isinstance(x, str) else x)
 
             # Reorder columns for better display

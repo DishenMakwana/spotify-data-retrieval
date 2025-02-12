@@ -8,17 +8,17 @@ st.write("Welcome! Use the buttons below to navigate between pages.")
 
 # Navigation Buttons
 navigation_items = {
-    "user recent played songs": "pages/user_recent_played_songs.py",
-    "tracks": "pages/tracks.py",
-    "albums": "pages/albums.py",
-    "artists": "pages/artists.py"
+    "User recent played songs": "pages/user_recent_played_songs.py",
+    "Tracks": "pages/tracks.py",
+    "Albums": "pages/albums.py",
+    "Artists": "pages/artists.py"
 }
 
 col1, col2 = st.columns(2)
 
 for index, (label, page) in enumerate(navigation_items.items()):
-    button_label = label.upper()  # Convert to uppercase
+    button_label = label 
     with (col1 if index % 2 == 0 else col2):
         if st.button(button_label):
-            st.session_state["current_page"] = label.upper()  # Track the current page
+            st.session_state["current_page"] = label
             st.switch_page(page)

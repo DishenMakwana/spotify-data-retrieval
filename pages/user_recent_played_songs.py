@@ -38,17 +38,25 @@ if response.status_code == 200:
         df = pd.DataFrame(data)
 
         if {"album_id", "album_name", "album_url"}.issubset(df.columns):
-            df["Album Link"] = df["album_url"].apply(lambda x: f'<a href="{x}" target="_blank">Open</a>')
-            df["Track Url Link"] = df["track_url"].apply(lambda x: f'<a href="{x}" target="_blank">Open</a>')
-            df["Playlist Url Link"] = df["context_url"].apply(lambda x: f'<a href="{x}" target="_blank">Open</a>')
-            df["Album Image"] = df["track_album_image"].apply(lambda x: f'<img src="{x if x else ""}" style="width:100px; height:100px;">')
+            df["Album Link"] = df["album_url"].apply(
+                lambda x: f'<a href="{x}" target="_blank">Open</a>' if x else ""
+            )
+            df["Track Url Link"] = df["track_url"].apply(
+                lambda x: f'<a href="{x}" target="_blank">Open</a>' if x else ""
+            )
+            df["Playlist Url Link"] = df["context_url"].apply(
+                lambda x: f'<a href="{x}" target="_blank">Open</a>' if x else ""
+            )
+            df["Album Image"] = df["track_album_image"].apply(
+                lambda x: f'<img src="{x}" style="width:100px; height:100px;">' if x else ""
+            )
 
             df["played_at"] = pd.to_datetime(df["played_at"]).dt.strftime('%d-%m-%Y %I:%M %p')
 
             cols = ["album_id", "album_name", "Album Link", "Album Image"] + [col for col in df.columns if col not in ["album_id", "album_name", "album_url", "Album Link", "Album Image"]]
             df = df[cols]
 
-            df = df.drop(columns=["track_url", "context_url", "track_album_artists", "track_album_images", "track_album_image"])
+            df = df.drop(columns=["track_url", "context_url", "track_album_artists", "track_album_images", "track_album_image", "context_type"])
 
             df.columns = df.columns.str.replace("_", " ").str.title()
 
